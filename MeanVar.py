@@ -10,16 +10,43 @@ np.random.seed(0)
 #NPV is r_i and e_i is the expected gain
 #Constraitns are decision variables and budget
 
+def init(B,I,N_design):
 
-def __main__(B,printFlag,lmbda):
-    I = 7
-    B_Total = B
-    N_design = 6
+    #Data initialization
+
     Budget = np.loadtxt('Budget.txt', usecols=range(N_design))
     Data = np.loadtxt('Data.txt', usecols=range(I))
     ExpectedGain = np.loadtxt('Expected.txt',usecols=range(N_design))
-    varNPV = np.random.randint(30,20000,(7,6))
-  
+    varNPV = np.zeros((7,6))
+    Pos = np.zeros((I,N_design))
+    one_beta = Data[18:24,:]
+    P_i_a = Data[1,:]
+    alpha_i = Data[3,:]
+    n__trials = Data[16,:]
+    r = np.zeros((I,N_design))
+
+    #calculating PoSij
+    for i in range(I):
+        for j in range(N_design):
+            Pos[i][j] = (one_beta[j][i]**n__trials[i])*P_i_a[i] + (alpha_i[i]**n__trials[i])*(1-P_i_a[i])
+            if Pos[i][j] != 0: r[i][j] = (ExpectedGain[i][j]+Budget[i][j]*(1-Pos[i][j]))/Pos[i][j]
+            else:r[i][j] = 0
+    #calculating varNPV        
+    for i in range(I):
+        for j in range(N_design):
+            varNPV[i][j] = np.sum((ExpectedGain-r[i][j])**2)/(I*N_design-1)
+
+    #lambda = max(e_ij)/max(varNPV)
+    lmbda = np.max(ExpectedGain)/np.max(varNPV)
+    
+    return Budget, varNPV, ExpectedGain, lmbda
+
+    
+def __main__(B,printFlag):
+    I = 7
+    B_Total = B
+    N_design = 6
+    Budget,varNPV,ExpectedGain,lmbda = init(B,I,N_design)
 
     # Create the mip solver with the SCIP backend.
     # Also CBC can be used
@@ -28,8 +55,8 @@ def __main__(B,printFlag,lmbda):
     for i in range(I):
         for j in range(N_design):
             x[(i, j)] = solver.IntVar(0, 1, 'x_%i_%i' % (i, j))
-    
-    
+            
+
     # Constraints
     # Each drug can have at most one selected design.
     for i in range(I):
@@ -79,48 +106,24 @@ def __main__(B,printFlag,lmbda):
 
 ##Experiment
 bInterval = np.linspace(0,300,num=100)
-lmbda = 0.17
 expectedReturn=[]
 t = time.time()
 for b in bInterval:
 
-    expectedReturn.append(__main__(b,False,lmbda))
+    expectedReturn.append(__main__(b,False))
 
 ##The Optimal Decision for B = 150 M$ 
-__main__(150,True,lmbda)
+__main__(150,True)
 t=time.time()-t
 print(t)
-##Plot
 
 
-## Effect of lambda
-lmbda = np.linspace(0,1,num=100)
 
-###calculate mean of best lambdas
-# lambdaExpectedReturn = []
-# max = 0
-# for b in bInterval:
-#     for l in lmbda:
-#         lambdaExpectedReturn.append(__main__(b,False,l))
-#     index = np.argmax(lambdaExpectedReturn)%len(lmbda)
-#     lambdaExpectedReturn = []
-#     max += lmbda[index]
 
-# lambdaMean = np.true_divide(max,len(bInterval))
-# print(lambdaMean)
-
-lambdaExpectedReturn = []
-for l in lmbda:
-        lambdaExpectedReturn.append(__main__(150,False,l))
 
 ##Plot
 
-fig, (ax1, ax2) = plt.subplots(1,2)
-ax1.plot(bInterval,expectedReturn)
-ax1.set_xlabel('Total Budget ($M)')
-ax1.set_ylabel('Expexted Gain ($M)')
-
-ax2.plot(lmbda,lambdaExpectedReturn)
-ax2.set_xlabel('lambda value')
-ax2.set_ylabel('Expexted Gain ($M) with Fixed budget')
+plt.plot(bInterval,expectedReturn)
+plt.xlabel('Total Budget ($M)')
+plt.ylabel('Expexted Gain ($M)')
 plt.show()
